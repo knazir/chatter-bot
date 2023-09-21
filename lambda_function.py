@@ -17,8 +17,13 @@ sb = SkillBuilder()
 openai.api_key = os.environ["OPENAI_API_KEY"]
 model = "gpt-3.5-turbo"
 temperature = 0.9
-max_tokens = 50
+max_tokens = 100
 prompt_slot = "prompt"
+system_prompt = """
+You are a conversational AI. You should respond casually as though you are talking to a friend.
+Do not give overly verbose answers with long rationalizations for your thoughts, you can have normal length responses.
+If you would like and it's appropriate for the situation, you can even ask follow-up questions at the end of your response, but don't do this all the time.
+"""
 
 class LaunchRequestHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -27,7 +32,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speech_text = "Welcome to the Chatter Bot, a better AI conversationalist!"
+        speech_text = "Welcome to Chatter Bot, let's chat!"
 
         handler_input.response_builder.speak(speech_text).set_card(
             SimpleCard("Chatter Bot", speech_text)).set_should_end_session(False)
@@ -53,7 +58,7 @@ class InvokeChatGPTIntentHandler(AbstractRequestHandler):
         # system message
         system_message = {
             "role": "system",
-            "content": "You are a conversational AI."
+            "content": system_prompt
         }
         message_list.append(system_message)
 
