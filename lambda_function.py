@@ -9,6 +9,7 @@ from ask_sdk_core.handler_input import HandlerInput
 from ask_sdk_core.skill_builder import SkillBuilder
 from ask_sdk_core.utils import is_request_type, is_intent_name
 from ask_sdk_model import Response
+from ask_sdk_model.dialog import ElicitSlotDirective
 from ask_sdk_model.ui import SimpleCard
 
 sb = SkillBuilder()
@@ -19,6 +20,7 @@ model = "gpt-3.5-turbo"
 temperature = 0.9
 max_tokens = 100
 prompt_slot = "prompt"
+message_list_key = "messages"
 system_prompt = """
 You are a conversational AI. You should respond casually as though you are talking to a friend.
 Do not give overly verbose answers with long rationalizations for your thoughts, you can have normal length responses.
@@ -52,22 +54,24 @@ class InvokeChatGPTIntentHandler(AbstractRequestHandler):
                 SimpleCard("Chatter Bot", speech_text)).set_should_end_session(True)
             return handler_input.response_builder.response
         
+        session_attributes = handler_input.attributes_manager.session_attributes
         phrase = slots[prompt_slot].value
-        message_list = []
         
-        # system message
-        system_message = {
-            "role": "system",
-            "content": system_prompt
-        }
-        message_list.append(system_message)
+        # fill in system prompt if start of conversation
+        if message_list_key not in session_attributes:
+            message_list = []
+            message_list.append({
+                "role": "system",
+                "content": system_prompt
+            })
+        else:
+            message_list = session_attributes[message_list_key]
 
-        # user message
-        user_message = {
+        # most-recent user message
+        message_list.append({
             "role": "user",
             "content": phrase
-        }
-        message_list.append(user_message)
+        })
 
         # make request
         response_message = openai.ChatCompletion.create(
@@ -77,10 +81,22 @@ class InvokeChatGPTIntentHandler(AbstractRequestHandler):
             max_tokens=max_tokens
         )
         speech_text = response_message.choices[0].message.content
+        
+        # store responses for any follow-ups
+        message_list.append({
+            "role": "assistant",
+            "content": speech_text
+        })
+        session_attributes[message_list_key] = message_list
 
-        handler_input.response_builder.speak(speech_text).set_card(
-            SimpleCard("Chatter Bot", speech_text)).set_should_end_session(True)
-        return handler_input.response_builder.response
+        return (
+            handler_input.response_builder
+            .ask(speech_text)
+            .set_card(SimpleCard("Chatter Bot", speech_text))
+            .add_directive(ElicitSlotDirective(slot_to_elicit=prompt_slot))
+            .set_should_end_session(False)
+            .response
+        )
 
 class HelpIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
